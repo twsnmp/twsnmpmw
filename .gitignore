@@ -25,6 +25,7 @@ build/bin
 # IDEs
 .idea
 .vscode
+.task
 
 # The black hole that is...
 node_modules

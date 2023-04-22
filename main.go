@@ -18,6 +18,9 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+		Assets: application.AssetOptions{
+			FS: assets,
+		},
 	})
 	// Create window
 	app.NewWebviewWindowWithOptions(&application.WebviewWindowOptions{
@@ -30,9 +33,6 @@ func main() {
 		},
 
 		URL: "/",
-		Assets: application.AssetOptions{
-			FS: assets,
-		},
 	})
 
 	err := app.Run()
