@@ -19,3 +19,16 @@
 
 # Go workspace file
 go.work
+
+build/bin
+
+# IDEs
+.idea
+.vscode
+
+# The black hole that is...
+node_modules
+frontend/node_modules
+
+# Wails build
+frontend/dist
