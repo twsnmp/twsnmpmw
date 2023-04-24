@@ -1,4 +1,5 @@
 <script>
+  import logo from "./assets/appicon.png"
   import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell } from 'flowbite-svelte';
   import { Navbar, NavBrand, DarkMode } from 'flowbite-svelte'
   import { Footer, FooterBrand, FooterCopyright, FooterIcon, FooterLink, FooterLinkGroup } from "flowbite-svelte"
@@ -8,16 +9,12 @@
     { state: "warn", name: 'miniPC2', url: 'http://192.168.14:8080', show: false },
   ];
   let version = "";
-  
+
 </script>
 
-<Navbar let:hidden let:toggle>
-  <NavBrand href="/">
-    <img
-      src="/wails.png"
-      class="mr-3 h-6 sm:h-9"
-      alt="Wails Logo"
-    />
+<Navbar>
+  <NavBrand>
+    <img src="{logo}" class="mr-3 h-10"alt="Logo" />
     <span class="self-center whitespace-nowrap text-xl font-semibold dark:text-white">
       TWSNMP FC Multi Window
     </span>
