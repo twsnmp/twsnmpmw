@@ -2,7 +2,7 @@ package main
 
 import (
 	"embed"
-	_ "embed"
+	"fmt"
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -10,6 +10,15 @@ import (
 
 //go:embed frontend/dist
 var assets embed.FS
+
+type App struct{}
+
+var verison = "v1.0.0"
+var commit = ""
+
+func (a *App) GetVersion() string {
+	return fmt.Sprintf("%s(%s)", verison, commit)
+}
 
 func main() {
 	app := application.New(application.Options{
@@ -20,6 +29,9 @@ func main() {
 		},
 		Assets: application.AssetOptions{
 			FS: assets,
+		},
+		Bind: []any{
+			&App{},
 		},
 	})
 	// Create window
