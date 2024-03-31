@@ -1,14 +1,22 @@
 <script>
   import logo from "./assets/appicon.png"
+  import {GetVersion } from "./lib/bindings_main"
   import { Table, TableBody, TableBodyCell, TableBodyRow, TableHead, TableHeadCell } from 'flowbite-svelte';
   import { Navbar, NavBrand, DarkMode } from 'flowbite-svelte'
-  import { Footer, FooterBrand, FooterCopyright, FooterIcon, FooterLink, FooterLinkGroup } from "flowbite-svelte"
+  import { Footer, FooterCopyright } from "flowbite-svelte"
   import * as Icon from 'svelte-heros-v2';
+  import "./lib/bindings_main.js"
+
   let maps = [
     { state: "normal", name: 'Mac mini', url: 'http://localhost:3000', show: false },
     { state: "warn", name: 'miniPC2', url: 'http://192.168.14:8080', show: false },
   ];
+
   let version = "";
+  
+  GetVersion().then((v) => {
+    version =v;
+  })
 
 </script>
 

@@ -25,6 +25,11 @@ tasks:
     cmds:
       - npm install
 
+  generate-bindings:
+    summary: generate js bindings
+    cmds:
+      - wailsv3 generate bindings -d frontend/src/lib/
+
   build-frontend:
     summary: Build the frontend project
     dir: frontend
@@ -38,7 +43,7 @@ tasks:
     cmds:
       - task: pre-build
       - task: build-frontend
-      - go build -gcflags=all="-N -l" -o build/bin/{{.APP_NAME}} main.go
+      - go build -gcflags=all="-N -l" -o build/bin/{{.APP_NAME}} .
       - task: post-build
     env:
       CGO_CFLAGS: "-mmacosx-version-min=10.13"
@@ -49,7 +54,7 @@ tasks:
     dir: build
     cmds:
       # Generates both .ico and .icns files
-      - wails generate icons -input appicon.png
+      - wailsv3 generate icons -input appicon.png
 
   build-app-prod-darwin:
     summary: Creates a production build of the application

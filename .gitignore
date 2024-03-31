@@ -36,3 +36,5 @@ frontend/node_modules
 # Wails build
 frontend/dist
 
+# Auto Generate
+frontend/src/lib/bindings_main.js
