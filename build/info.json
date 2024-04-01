@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "1.0.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "1.0.0",
+			"CompanyName": "TWSNMP",
+			"FileDescription": "Multi Windows Vuiwer for TWSNMP FC",
+			"LegalCopyright": "© 2024, Masayuki Yamai",
+			"ProductName": "twsnmpmw",
+			"Comments": "Multi Windows Vuiwer for TWSNMP FC"
+		}
+	}
+}
