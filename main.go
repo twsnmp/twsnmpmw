@@ -36,12 +36,9 @@ func main() {
 	app.NewWebviewWindowWithOptions(application.WebviewWindowOptions{
 		Title: "TWSNMP Multi Window",
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
+			Backdrop: application.MacBackdropTranslucent,
 		},
-		BackgroundColour: application.NewRGB(27, 38, 54),
-		URL:              "/",
+		URL: "/",
 	})
 
 	err := app.Run()
