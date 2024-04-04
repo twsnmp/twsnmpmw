@@ -13,16 +13,20 @@ var assets embed.FS
 //go:embed build/appicon.png
 var icon []byte
 
+var app *application.App
 var version = "v1.0.0"
 var commit = ""
 
 func main() {
+	twsnmp := &Twsnmp{}
+	twsnmp.load()
+	stop := twsnmp.checkSiteState()
 
-	app := application.New(application.Options{
+	app = application.New(application.Options{
 		Name:        "TWSNMP Multi Window",
 		Description: "Multi Window Viewer for TWSNMP FC",
 		Bind: []any{
-			&TwsnmpMWService{},
+			twsnmp,
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -34,16 +38,17 @@ func main() {
 	})
 
 	app.NewWebviewWindowWithOptions(application.WebviewWindowOptions{
-		Title: "TWSNMP Multi Window",
+		Title: "TWSNMP MV Main",
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 		},
-		URL: "/",
+		URL: "/?page=main",
 	})
 
-	err := app.Run()
-
-	if err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+	stop <- true
+	close(stop)
+	twsnmp.save()
 }

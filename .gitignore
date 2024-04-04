@@ -38,5 +38,6 @@ frontend/dist
 
 # Auto Generate
 frontend/src/lib/bindings_main.js
+frontend/bindings
 
 bin/
