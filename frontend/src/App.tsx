@@ -1,21 +1,18 @@
 import 'flowbite';
 import { Match, Switch } from 'solid-js';
+import Main from './Main';
 
-function App() {
+const App = () => {
   const url = new URL(window.location.href);
   const params = url.searchParams;
-
-  console.log(params.get("page"));
-  console.log(params.get("id"));
-
-  const page = params.get("page");
+  const page = params.get("page") || "main";
   const id = params.get("id");
 
   return (
     <>
       <Switch>
         <Match when={page == "main"} >
-          <p class="text-4xl text-red-600">Main Page</p>
+          <Main></Main>
         </Match>
         <Match when={page == "map"} >
           <p class="text-4xl text-blue-600">MAP Page id={id}</p>

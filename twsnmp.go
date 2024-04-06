@@ -15,14 +15,12 @@ import (
 )
 
 type Site struct {
-	ID        string
-	Name      string
-	URL       string
-	User      string
-	Password  string
-	PublicKey string
-	//
-	State string
+	Id       string `json:"id"`
+	Name     string `json:"name"`
+	Url      string `json:"url"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	State    string `json:"state"`
 }
 
 type Twsnmp struct {
@@ -34,14 +32,46 @@ func (t *Twsnmp) GetVersion() string {
 	return fmt.Sprintf("%s(%s)", version, commit)
 }
 
-func (t *Twsnmp) UpdateSite(s Site) {
-	if s.ID == "" {
-		s.ID = fmt.Sprintf("%x", time.Now().UnixNano())
-		s.State = "unknown"
-	}
-	t.Sites.Store(s.ID, s)
+func (t *Twsnmp) GetSites() []Site {
+	ret := []Site{}
+	t.Sites.Range(func(k, v any) bool {
+		if s, ok := v.(Site); ok {
+			ret = append(ret, s)
+		}
+		return true
+	})
+	return ret
 }
 
+func (t *Twsnmp) UpdateSite2(s Site) {
+	if s.Id == "" {
+		s.Id = fmt.Sprintf("%x", time.Now().UnixNano())
+		s.State = "unknown"
+	}
+	t.Sites.Store(s.Id, s)
+}
+
+func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
+	state := "unknow"
+	if id == "" {
+		id = fmt.Sprintf("%x", time.Now().UnixNano())
+	}
+	if v, ok := t.Sites.Load(id); ok {
+		if s, ok := v.(Site); ok {
+			state = s.State
+		}
+	}
+	t.Sites.Store(id, Site{
+		Id:       id,
+		Name:     name,
+		Url:      url,
+		User:     user,
+		Password: password,
+		State:    state,
+	})
+}
+
+// DeleteSite は Siteを削除します
 func (t *Twsnmp) DeleteSite(id string) {
 	t.Sites.Delete(id)
 	t.Kvs.Set(id, nil)
@@ -84,7 +114,7 @@ func (t *Twsnmp) load() {
 			if j, ok := v.(string); ok {
 				s := Site{}
 				if err := json.Unmarshal([]byte(j), &s); err == nil {
-					t.Sites.Store(s.ID, s)
+					t.Sites.Store(s.Id, s)
 				}
 			}
 		}

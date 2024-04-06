@@ -39,8 +39,8 @@ func main() {
 
 	app.NewWebviewWindowWithOptions(application.WebviewWindowOptions{
 		Title: "TWSNMP MV Main",
-		Mac: application.MacWindow{
-			Backdrop: application.MacBackdropTranslucent,
+		Mac:   application.MacWindow{
+			//Backdrop: application.MacBackdropTranslucent,
 		},
 		URL: "/?page=main",
 	})
