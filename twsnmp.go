@@ -6,12 +6,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/plugins/kvstore"
+	"go.etcd.io/bbolt"
 )
 
 type Site struct {
@@ -24,7 +23,7 @@ type Site struct {
 }
 
 type Twsnmp struct {
-	Kvs   *kvstore.KeyValueStore
+	db    *bbolt.DB
 	Sites sync.Map
 }
 
@@ -61,20 +60,34 @@ func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
 			state = s.State
 		}
 	}
-	t.Sites.Store(id, Site{
+	s := Site{
 		Id:       id,
 		Name:     name,
 		Url:      url,
 		User:     user,
 		Password: password,
 		State:    state,
+	}
+	t.Sites.Store(id, s)
+	t.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("twsnmp"))
+		if j, err := json.Marshal(&s); err == nil {
+			b.Put([]byte(id), j)
+		} else {
+			return err
+		}
+		return nil
 	})
+
 }
 
 // DeleteSite は Siteを削除します
 func (t *Twsnmp) DeleteSite(id string) {
 	t.Sites.Delete(id)
-	t.Kvs.Set(id, nil)
+	t.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("twsnmp"))
+		return b.Delete([]byte(id))
+	})
 }
 
 func (t *Twsnmp) OpenSiteMap(id string) bool {
@@ -102,41 +115,29 @@ func (t *Twsnmp) load() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	t.Kvs = kvstore.NewPlugin(&kvstore.Config{
-		Filename: filepath.Join(conf, "twsnmpmw.db"),
-	})
-	m, ok := t.Kvs.Get("").(map[string]any)
-	if !ok {
-		return
+	os.MkdirAll(filepath.Join(conf, "twsnmpmw"), 0766)
+	t.db, err = bbolt.Open(filepath.Join(conf, "twsnmpmw", "twsnmpmw.db"), 0600, nil)
+	if err != nil {
+		log.Fatalf("Open err=%v", err)
 	}
-	for k, v := range m {
-		if strings.HasPrefix(k, "twsmp") {
-			if j, ok := v.(string); ok {
-				s := Site{}
-				if err := json.Unmarshal([]byte(j), &s); err == nil {
-					t.Sites.Store(s.Id, s)
-				}
+	t.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("twsnmp"))
+		if b == nil {
+			b, err = tx.CreateBucketIfNotExists([]byte("twsnmp"))
+			if err != nil {
+				log.Fatal(err)
 			}
 		}
-	}
-}
-
-func (t *Twsnmp) save() {
-	t.Sites.Range(func(k, v any) bool {
-		if id, ok := k.(string); ok {
-			if s, ok := v.(Site); ok {
-				k := "twsnmp_" + id
-				if j, err := json.Marshal(&s); err == nil {
-					if err := t.Kvs.Set(k, j); err != nil {
-						log.Println(err)
-					}
-				}
-
+		b.ForEach(func(k, v []byte) error {
+			id := string(k)
+			var s Site
+			if err := json.Unmarshal(v, &s); err == nil && id == s.Id {
+				t.Sites.Store(id, s)
 			}
-		}
-		return true
+			return nil
+		})
+		return nil
 	})
-	t.Kvs.Save()
 }
 
 func (t *Twsnmp) checkSiteState() chan bool {

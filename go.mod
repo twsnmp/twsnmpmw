@@ -4,7 +4,10 @@ go 1.22
 
 toolchain go1.22.0
 
-require github.com/wailsapp/wails/v3 v3.0.0-alpha.0
+require (
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.0
+	go.etcd.io/bbolt v1.3.9
+)
 
 require (
 	dario.cat/mergo v1.0.0 // indirect

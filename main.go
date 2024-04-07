@@ -44,11 +44,9 @@ func main() {
 		},
 		URL: "/?page=main",
 	})
-
 	if err := app.Run(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("app.Run err=%v", err)
 	}
 	stop <- true
 	close(stop)
-	twsnmp.save()
 }
