@@ -128,9 +128,8 @@ func (t *Twsnmp) OpenSiteMap(id string) bool {
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 		},
-		URL: "/?page=map&id=" + id,
+		URL: s.Url + "/?user=" + s.User + "&password=" + s.Password,
 	})
-
 	return true
 }
 
