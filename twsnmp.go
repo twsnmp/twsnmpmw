@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -22,9 +27,17 @@ type Site struct {
 	State    string `json:"state"`
 }
 
+type Api struct {
+	Id    string
+	Url   string
+	Token string
+	State string
+}
+
 type Twsnmp struct {
 	db    *bbolt.DB
 	Sites sync.Map
+	api   sync.Map
 }
 
 func (t *Twsnmp) GetVersion() string {
@@ -34,8 +47,13 @@ func (t *Twsnmp) GetVersion() string {
 func (t *Twsnmp) GetSites() []Site {
 	ret := []Site{}
 	t.Sites.Range(func(k, v any) bool {
-		if s, ok := v.(Site); ok {
-			ret = append(ret, s)
+		if s, ok := v.(*Site); ok {
+			if av, ok := t.api.Load(s.Id); ok {
+				if a, ok := av.(*Api); ok {
+					s.State = a.State
+				}
+			}
+			ret = append(ret, *s)
 		}
 		return true
 	})
@@ -47,7 +65,7 @@ func (t *Twsnmp) UpdateSite2(s Site) {
 		s.Id = fmt.Sprintf("%x", time.Now().UnixNano())
 		s.State = "unknown"
 	}
-	t.Sites.Store(s.Id, s)
+	t.Sites.Store(s.Id, &s)
 }
 
 func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
@@ -56,11 +74,11 @@ func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
 		id = fmt.Sprintf("%x", time.Now().UnixNano())
 	}
 	if v, ok := t.Sites.Load(id); ok {
-		if s, ok := v.(Site); ok {
+		if s, ok := v.(*Site); ok {
 			state = s.State
 		}
 	}
-	s := Site{
+	s := &Site{
 		Id:       id,
 		Name:     name,
 		Url:      url,
@@ -69,9 +87,14 @@ func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
 		State:    state,
 	}
 	t.Sites.Store(id, s)
+	t.api.Delete(id)
+	t.api.Store(id, &Api{
+		Id:  id,
+		Url: s.Url,
+	})
 	t.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("twsnmp"))
-		if j, err := json.Marshal(&s); err == nil {
+		if j, err := json.Marshal(s); err == nil {
 			b.Put([]byte(id), j)
 		} else {
 			return err
@@ -84,6 +107,7 @@ func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
 // DeleteSite は Siteを削除します
 func (t *Twsnmp) DeleteSite(id string) {
 	t.Sites.Delete(id)
+	t.api.Delete(id)
 	t.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("twsnmp"))
 		return b.Delete([]byte(id))
@@ -95,7 +119,7 @@ func (t *Twsnmp) OpenSiteMap(id string) bool {
 	if !ok {
 		return false
 	}
-	s, ok := v.(Site)
+	s, ok := v.(*Site)
 	if !ok {
 		return false
 	}
@@ -132,7 +156,11 @@ func (t *Twsnmp) load() {
 			id := string(k)
 			var s Site
 			if err := json.Unmarshal(v, &s); err == nil && id == s.Id {
-				t.Sites.Store(id, s)
+				t.Sites.Store(id, &s)
+				t.api.Store(id, &Api{
+					Id:  id,
+					Url: s.Url,
+				})
 			}
 			return nil
 		})
@@ -141,7 +169,7 @@ func (t *Twsnmp) load() {
 }
 
 func (t *Twsnmp) checkSiteState() chan bool {
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	stop := make(chan bool)
 	go func() {
 		for {
@@ -151,8 +179,135 @@ func (t *Twsnmp) checkSiteState() chan bool {
 			case <-ticker.C:
 				// Check site here
 				log.Println("check site")
+				t.Sites.Range(func(k, v any) bool {
+					if s, ok := v.(*Site); ok {
+						av, ok := t.api.Load(s.Id)
+						if !ok {
+							return true
+						}
+						a, ok := av.(*Api)
+						if !ok {
+							return true
+						}
+						if a.Token == "" {
+							if !a.login(loginParam{UserID: s.User, Password: s.Password}) {
+								a.State = "unknown"
+								return true
+							}
+						}
+						a.GetState()
+					}
+					return true
+				})
 			}
 		}
 	}()
 	return stop
+}
+
+var insecureTransport = &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}
+
+var insecureClient = &http.Client{Transport: insecureTransport}
+
+type loginParam struct {
+	UserID   string `json:"UserID"`
+	Password string `json:"Password"`
+}
+
+type loginResp struct {
+	Token string `json:"token"`
+}
+
+func (a *Api) login(l loginParam) bool {
+	j, err := json.Marshal(&l)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequest(http.MethodPost, a.Url+"/login", bytes.NewBuffer(j))
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := insecureClient.Do(req.WithContext(ctx))
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.ContentLength > 1024 {
+		log.Printf("size over %d", resp.ContentLength)
+		return false
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	var r loginResp
+	if err := json.Unmarshal(body, &r); err != nil {
+		log.Println(err)
+		return false
+	}
+	a.Token = r.Token
+	return true
+}
+
+type nodeEnt struct {
+	Name  string `json:"Name"`
+	State string `json:"State"`
+}
+
+func (a *Api) GetState() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequest(http.MethodGet, a.Url+"/api/nodes", nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+a.Token)
+	resp, err := insecureClient.Do(req.WithContext(ctx))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.ContentLength > 1024*64*1024 {
+		log.Printf("size over %d", resp.ContentLength)
+		return
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	var nodes []nodeEnt
+	if err := json.Unmarshal(body, &nodes); err != nil {
+		log.Println(err)
+		return
+	}
+	a.State = "unknown"
+	for _, n := range nodes {
+		switch n.State {
+		case "high":
+			a.State = "high"
+			return
+		case "low":
+			a.State = "low"
+		case "warn":
+			if a.State != "low" {
+				a.State = "warn"
+			}
+		case "normal", "repair":
+			if a.State == "unknown" {
+				a.State = "normal"
+			}
+		}
+	}
 }
