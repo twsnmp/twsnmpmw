@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "flowbite": "^2.3.0",
-    "solid-js": "^1.8.7"
+    "mapbox-gl": "npm:empty-npm-package@^1.0.0",
+    "maplibre-gl": "^4.1.2",
+    "solid-js": "^1.8.7",
+    "solid-map-gl": "^1.11.2"
   },
   "devDependencies": {
     "@wailsio/runtime": "latest",

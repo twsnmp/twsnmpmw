@@ -24,6 +24,7 @@ type Site struct {
 	Url      string `json:"url"`
 	User     string `json:"user"`
 	Password string `json:"password"`
+	Loc      string `json:"loc"`
 	State    string `json:"state"`
 }
 
@@ -58,14 +59,6 @@ func (t *Twsnmp) GetSites() []Site {
 		return true
 	})
 	return ret
-}
-
-func (t *Twsnmp) UpdateSite2(s Site) {
-	if s.Id == "" {
-		s.Id = fmt.Sprintf("%x", time.Now().UnixNano())
-		s.State = "unknown"
-	}
-	t.Sites.Store(s.Id, &s)
 }
 
 func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
@@ -114,6 +107,27 @@ func (t *Twsnmp) DeleteSite(id string) {
 	})
 }
 
+func (t *Twsnmp) UpdateSiteLoc(id, loc string) {
+	v, ok := t.Sites.Load(id)
+	if !ok {
+		return
+	}
+	s, ok := v.(*Site)
+	if !ok {
+		return
+	}
+	s.Loc = loc
+	t.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("twsnmp"))
+		if j, err := json.Marshal(s); err == nil {
+			b.Put([]byte(id), j)
+		} else {
+			return err
+		}
+		return nil
+	})
+}
+
 func (t *Twsnmp) OpenSiteMap(id string) bool {
 	v, ok := t.Sites.Load(id)
 	if !ok {
@@ -133,6 +147,32 @@ func (t *Twsnmp) OpenSiteMap(id string) bool {
 	return true
 }
 
+func (t *Twsnmp) LoadViewport() string {
+	vp := ""
+	t.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("config"))
+		if b != nil {
+			if v := b.Get([]byte("viewport")); v != nil {
+				vp = string(v)
+			}
+		}
+		return nil
+	})
+	return vp
+}
+
+func (t *Twsnmp) SaveViewport(vp string) {
+	t.db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		return b.Put([]byte("viewport"), []byte(vp))
+	})
+}
+
+// loadはsiteの設定を読み込む
 func (t *Twsnmp) load() {
 	conf, err := os.UserConfigDir()
 	if err != nil {

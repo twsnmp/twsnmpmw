@@ -3,6 +3,7 @@ import { Switch, Match, createSignal, onMount, For } from 'solid-js';
 import { Site } from "../bindings/main/models"
 import { GetSites, UpdateSite, DeleteSite,OpenSiteMap } from "../bindings/main/Twsnmp"
 import StateIcon from './StateIcon';
+import Map from './Map';
 
 const [page, setPage] = createSignal("list");
 
@@ -31,7 +32,6 @@ const Main = () => {
 }
 
 const List = () => {
-  console.log("list");
   const [sites, setSites] = createSignal<Site[]>([]);
   onMount(async () => {
     const l = await GetSites() as any;
@@ -86,11 +86,6 @@ const List = () => {
   )
 }
 
-const Map = () => {
-  return (
-    <>Map</>
-  )
-}
 
 const EditSite = () => {
   let name: HTMLInputElement | undefined;
