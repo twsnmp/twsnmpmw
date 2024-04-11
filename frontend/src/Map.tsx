@@ -5,7 +5,12 @@ import { Site } from "../bindings/main/models"
 import { GetSites,LoadViewport,SaveViewport,UpdateSiteLoc,OpenSiteMap } from "../bindings/main/Twsnmp"
 import 'maplibre-gl/dist/maplibre-gl.css'
 
-const Map: Component = () => {
+type Props = {
+  mapStyle: string
+}
+
+const Map: Component<Props> = (props:Props) => {
+  const mapStyle = props.mapStyle || "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json"; 
   const [viewport, setViewport] = createSignal({
     center: [139.75,35.68],
     zoom: 2,
@@ -22,7 +27,6 @@ const Map: Component = () => {
         center: [Number(a[1]),Number(a[2])],
       })
     }
-
   });
   onCleanup(async()=> {
     const vp = viewport()
@@ -74,7 +78,7 @@ ${s.name}
     <MapGL
       mapLib={maplibre}
       options={{ 
-        style: "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json" 
+        style: mapStyle
       }}
       viewport={viewport()}
       onViewportChange={(evt: Viewport) => setViewport(evt)}

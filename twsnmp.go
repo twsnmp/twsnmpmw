@@ -171,6 +171,59 @@ func (t *Twsnmp) SaveViewport(vp string) {
 		return b.Put([]byte("viewport"), []byte(vp))
 	})
 }
+func (t *Twsnmp) IsDark() bool {
+	r := false
+	t.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("config"))
+		if b != nil {
+			if v := b.Get([]byte("dark")); v != nil {
+				r = string(v) == "true"
+			}
+		}
+		return nil
+	})
+	return r
+}
+
+func (t *Twsnmp) SaveDark(r bool) {
+	t.db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		v := "false"
+		if r {
+			v = "true"
+		}
+		return b.Put([]byte("dark"), []byte(v))
+	})
+}
+
+func (t *Twsnmp) GetMapStyle() string {
+	r := ""
+	t.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("config"))
+		if b != nil {
+			if v := b.Get([]byte("mapStyle")); v != nil {
+				r = string(v)
+			}
+		}
+		return nil
+	})
+	return r
+}
+
+func (t *Twsnmp) SaveMapStyle(ms string) {
+	t.db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		return b.Put([]byte("mapStyle"), []byte(ms))
+	})
+}
 
 // loadはsiteの設定を読み込む
 func (t *Twsnmp) load() {
