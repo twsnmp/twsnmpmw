@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -23,8 +24,8 @@ func main() {
 	stop := twsnmp.checkSiteState()
 
 	app = application.New(application.Options{
-		Name:        "TWSNMP Multi Window",
-		Description: "Multi Window Viewer for TWSNMP FC",
+		Name:        "TWSNMP MW",
+		Description: fmt.Sprintf("TWSNMP MW %s(%s)\nTWSNMP Multi Window viewer", version, commit),
 		Bind: []any{
 			twsnmp,
 		},
@@ -38,11 +39,11 @@ func main() {
 	})
 
 	app.NewWebviewWindowWithOptions(application.WebviewWindowOptions{
-		Title: "TWSNMP MV Main",
-		Mac:   application.MacWindow{
-			//Backdrop: application.MacBackdropTranslucent,
+		Title: "TWSNMP MV",
+		Mac: application.MacWindow{
+			Backdrop: application.MacBackdropTranslucent,
 		},
-		URL: "/?page=main",
+		URL: "/",
 	})
 	if err := app.Run(); err != nil {
 		log.Fatalf("app.Run err=%v", err)

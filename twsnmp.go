@@ -41,10 +41,6 @@ type Twsnmp struct {
 	api   sync.Map
 }
 
-func (t *Twsnmp) GetVersion() string {
-	return fmt.Sprintf("%s(%s)", version, commit)
-}
-
 func (t *Twsnmp) GetSites() []Site {
 	ret := []Site{}
 	t.Sites.Range(func(k, v any) bool {

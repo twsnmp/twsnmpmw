@@ -3,6 +3,9 @@ version: '3'
 vars:
   APP_NAME: "twsnmpmw"
   BIN_DIR: "bin"
+  VERSION: v0.1.0
+  COMMIT:
+    sh: git rev-parse --short HEAD
 
 tasks:
 
@@ -34,7 +37,7 @@ tasks:
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/twsnmpmw.exe
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -ldflags="-w -s -H windowsgui"{{else}}-gcflags=all="-N -l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -ldflags="-w -s -H windowsgui -X main.version={{.VERSION}} -X main.commit={{.COMMIT}}"{{else}}-gcflags=all="-N -l"{{end}}'
     env:
       GOOS: windows
       CGO_ENABLED: 0
@@ -82,7 +85,7 @@ tasks:
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -ldflags="-w -s"{{else}}-gcflags=all="-N -l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production -ldflags="-w -s -X main.version={{.VERSION}} -X main.commit={{.COMMIT}}"{{else}}-gcflags=all="-N -l"{{end}}'
     env:
       GOOS: darwin
       CGO_ENABLED: 1
