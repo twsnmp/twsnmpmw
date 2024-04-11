@@ -38,7 +38,7 @@ const App = () => {
       document.documentElement.style.backgroundColor = "rgba(19,19,19,0.8)";
     } else {
       document.documentElement.classList.remove('dark')
-      document.documentElement.style.backgroundColor = "transparent";
+      document.documentElement.style.backgroundColor = "white";
     }
   }
   const editSite = (s: Site) => {

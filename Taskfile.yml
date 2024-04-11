@@ -271,6 +271,13 @@ tasks:
         vars:
           ARCH: amd64
 
+  package:darwin:amd64:test:
+    summary: Packages a production build of the application into a `.app` bundle
+    deps:
+      - task: build:darwin:prod:amd64
+    cmds:
+      - task: create:app:bundle
+
   create:app:bundle:
     summary: Creates an `.app` bundle
     cmds:
