@@ -285,6 +285,10 @@ func (t *Twsnmp) checkSiteState() chan bool {
 						}
 						a.GetState()
 					}
+					app.Events.Emit(&application.WailsEvent{
+						Name: "update",
+						Data: "",
+					})
 					return true
 				})
 			}

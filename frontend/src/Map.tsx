@@ -4,12 +4,20 @@ import * as maplibre from 'maplibre-gl'
 import { Site } from "../bindings/main/models"
 import { GetSites,LoadViewport,SaveViewport,UpdateSiteLoc,OpenSiteMap } from "../bindings/main/Twsnmp"
 import 'maplibre-gl/dist/maplibre-gl.css'
+import {Events} from "@wailsio/runtime";
 
 type Props = {
   mapStyle: string
 }
 
 const Map: Component<Props> = (props:Props) => {
+  const refresh = async () => {
+    const l = await GetSites() as any;
+    setSites(l)
+  }
+  Events.On("update",()=>{
+    refresh();
+  });
   const mapStyle = props.mapStyle || "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json"; 
   const [viewport, setViewport] = createSignal({
     center: [139.75,35.68],
@@ -17,8 +25,7 @@ const Map: Component<Props> = (props:Props) => {
   } as Viewport);
   const [sites, setSites] = createSignal<Site[]>([]);
   onMount(async () => {
-    const l = await GetSites() as any;
-    setSites(l)
+    refresh();
     const vp = await LoadViewport() as string;
     const a = vp.split(",");
     if (a && a.length == 3 ) {

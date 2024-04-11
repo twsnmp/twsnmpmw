@@ -3,6 +3,7 @@ import { createSignal, onMount, For,Component } from 'solid-js';
 import { Site } from "../bindings/main/models"
 import { GetSites, DeleteSite,OpenSiteMap } from "../bindings/main/Twsnmp"
 import StateIcon from './StateIcon';
+import {Events} from "@wailsio/runtime";
 
 type Props = {
   edit: (s:Site) => void,
@@ -10,15 +11,19 @@ type Props = {
 
 const List: Component<Props> = (props: Props) => {
   const [sites, setSites] = createSignal<Site[]>([]);
-  onMount(async () => {
+  const refresh = async () => {
     const l = await GetSites() as any;
     setSites(l)
+  }
+  Events.On("update",()=>{
+    refresh();
+  });
+  onMount(() => {
+    refresh();
   });
   const delSite = async (id:string) => {
     await DeleteSite(id);
-    // 再読み込み　しないように変更したほうがよい
-    const l = await GetSites() as any;
-    setSites(l)
+    refresh();
   }
   return (
     <>
