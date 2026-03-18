@@ -26,8 +26,8 @@ func main() {
 	app = application.New(application.Options{
 		Name:        "TWSNMP MW",
 		Description: fmt.Sprintf("TWSNMP MW %s(%s)\nTWSNMP Multi Window viewer", version, commit),
-		Bind: []any{
-			twsnmp,
+		Services: []application.Service{
+			application.NewService(twsnmp),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -38,7 +38,7 @@ func main() {
 		Icon: icon,
 	})
 
-	app.NewWebviewWindowWithOptions(application.WebviewWindowOptions{
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "TWSNMP MV",
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,

@@ -133,12 +133,12 @@ func (t *Twsnmp) OpenSiteMap(id string) bool {
 	if !ok {
 		return false
 	}
-	app.NewWebviewWindowWithOptions(application.WebviewWindowOptions{
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "TWSNMP Map:" + s.Name,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 		},
-		URL: s.Url + "/?user=" + s.User + "&password=" + s.Password,
+		URL: s.Url + "/?UserID=" + s.User + "&Password=" + s.Password,
 	})
 	return true
 }
@@ -285,10 +285,7 @@ func (t *Twsnmp) checkSiteState() chan bool {
 						}
 						a.GetState()
 					}
-					app.Events.Emit(&application.WailsEvent{
-						Name: "update",
-						Data: "",
-					})
+					app.Event.Emit("update")
 					return true
 				})
 			}
