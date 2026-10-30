@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:dev": "tsc && vite build --minify false --mode development",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
@@ -16,7 +17,7 @@
     "solid-map-gl": "^1.11.2"
   },
   "devDependencies": {
-    "@wailsio/runtime": "latest",
+    "@wailsio/runtime": "^3.0.0",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",

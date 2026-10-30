@@ -1,12 +1,12 @@
 import 'flowbite';
 import { Match, Switch, createSignal,onMount } from 'solid-js';
-import { Site } from "../bindings/main/models"
+import { Site } from "../bindings/github.com/twsnmp/twsnmpmw"
 import Map from './Map';
 import List from './List';
 import EditSite from './EditSite';
 import Config  from './Config';
 import {MWConfig} from './Config';
-import { SaveDark,SaveMapStyle,IsDark,GetMapStyle } from '../bindings/main/Twsnmp';
+import { SaveDark,SaveMapStyle,IsDark,GetMapStyle } from '../bindings/github.com/twsnmp/twsnmpmw/twsnmp';
 
 const [page, setPage] = createSignal("list");
 let site: Site;

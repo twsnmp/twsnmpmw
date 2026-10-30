@@ -1,8 +1,8 @@
 import { Component, createSignal,onMount,onCleanup,For } from "solid-js";
 import MapGL, { Viewport,Marker } from "solid-map-gl";
 import * as maplibre from 'maplibre-gl'
-import { Site } from "../bindings/main/models"
-import { GetSites,LoadViewport,SaveViewport,UpdateSiteLoc,OpenSiteMap } from "../bindings/main/Twsnmp"
+import { Site } from "../bindings/github.com/twsnmp/twsnmpmw"
+import { GetSites,LoadViewport,SaveViewport,UpdateSiteLoc,OpenSiteMap } from "../bindings/github.com/twsnmp/twsnmpmw/twsnmp"
 import 'maplibre-gl/dist/maplibre-gl.css'
 import {Events} from "@wailsio/runtime";
 

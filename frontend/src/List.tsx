@@ -1,7 +1,7 @@
 import 'flowbite';
 import { createSignal, onMount, For,Component } from 'solid-js';
-import { Site } from "../bindings/main/models"
-import { GetSites, DeleteSite,OpenSiteMap } from "../bindings/main/Twsnmp"
+import { Site } from "../bindings/github.com/twsnmp/twsnmpmw"
+import { GetSites, DeleteSite,OpenSiteMap } from "../bindings/github.com/twsnmp/twsnmpmw/twsnmp"
 import StateIcon from './StateIcon';
 import {Events} from "@wailsio/runtime";
 

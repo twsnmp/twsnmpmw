@@ -1,7 +1,7 @@
 import 'flowbite';
 import { Component } from 'solid-js';
-import { Site } from "../bindings/main/models";
-import { UpdateSite } from "../bindings/main/Twsnmp";
+import { Site } from "../bindings/github.com/twsnmp/twsnmpmw";
+import { UpdateSite } from "../bindings/github.com/twsnmp/twsnmpmw/twsnmp";
 
 type Props = {
   site: Site,

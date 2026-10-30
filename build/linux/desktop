@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=twsnmpmw
+Comment=Multi Windows Viewer for TWSNMP FC
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/twsnmpmw %u
+Terminal=false
+Type=Application
+Icon=twsnmpmw
+Categories=Utility;
+StartupWMClass=twsnmpmw
+
+ 
