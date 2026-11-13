@@ -70,12 +70,14 @@ const BottomNav = () => {
   const addSite = () => {
     site = Site.createFrom({
       id: "",
-      name: "test",
+      name: "",
       url: "",
       user: "",
       password: "",
       state: "",
+      type: "auto",
     });
+    oldPage = page();
     setPage("edit");
   }
   const showConfig = ()=> {

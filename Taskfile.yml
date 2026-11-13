@@ -69,3 +69,26 @@ tasks:
     summary: Builds and runs the Docker image
     cmds:
       - task: common:run:docker
+
+  build:mcp:
+    summary: Builds the application with Wails v3 MCP server enabled (-tags mcp)
+    cmds:
+      - task: "{{.GOOS}}:build"
+        vars:
+          DEV: "true"
+          EXTRA_TAGS: "mcp"
+          OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-mcp"
+
+  run:mcp:
+    summary: Runs the application with MCP server enabled on http://127.0.0.1:9099/mcp
+    deps:
+      - build:mcp
+    cmds:
+      - ./{{.BIN_DIR}}/{{.APP_NAME}}-mcp
+
+  test:e2e:
+    summary: Runs E2E tests using the Wails v3 MCP server
+    deps:
+      - build:mcp
+    cmds:
+      - go test -v -tags e2e ./e2e/...

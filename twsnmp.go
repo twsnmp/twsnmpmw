@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -26,6 +27,7 @@ type Site struct {
 	Password string `json:"password"`
 	Loc      string `json:"loc"`
 	State    string `json:"state"`
+	Type     string `json:"type"` // "" or "auto": 自動判別, "fc": TWSNMP FC, "neo": TWSNMP NEO
 }
 
 type Api struct {
@@ -33,6 +35,7 @@ type Api struct {
 	Url   string
 	Token string
 	State string
+	Type  string
 }
 
 type Twsnmp struct {
@@ -48,6 +51,11 @@ func (t *Twsnmp) GetSites() []Site {
 			if av, ok := t.api.Load(s.Id); ok {
 				if a, ok := av.(*Api); ok {
 					s.State = a.State
+					if s.Type == "" || s.Type == "auto" {
+						if a.Type != "" && a.Type != "auto" {
+							s.Type = a.Type
+						}
+					}
 				}
 			}
 			ret = append(ret, *s)
@@ -57,8 +65,9 @@ func (t *Twsnmp) GetSites() []Site {
 	return ret
 }
 
-func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
-	state := "unknow"
+// UpdateSite は Siteを追加・更新します
+func (t *Twsnmp) UpdateSite(id, name, url, user, password, siteType string) {
+	state := "unknown"
 	if id == "" {
 		id = fmt.Sprintf("%x", time.Now().UnixNano())
 	}
@@ -74,12 +83,14 @@ func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
 		User:     user,
 		Password: password,
 		State:    state,
+		Type:     siteType,
 	}
 	t.Sites.Store(id, s)
 	t.api.Delete(id)
 	t.api.Store(id, &Api{
-		Id:  id,
-		Url: s.Url,
+		Id:   id,
+		Url:  s.Url,
+		Type: s.Type,
 	})
 	t.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("twsnmp"))
@@ -90,7 +101,6 @@ func (t *Twsnmp) UpdateSite(id, name, url, user, password string) {
 		}
 		return nil
 	})
-
 }
 
 // DeleteSite は Siteを削除します
@@ -133,12 +143,46 @@ func (t *Twsnmp) OpenSiteMap(id string) bool {
 	if !ok {
 		return false
 	}
+
+	title := "TWSNMP Map: " + s.Name
+	resolvedType := s.Type
+	if av, ok := t.api.Load(s.Id); ok {
+		if a, ok := av.(*Api); ok && a.Type != "" && a.Type != "auto" {
+			resolvedType = a.Type
+		}
+	}
+	if resolvedType == "neo" {
+		title = "TWSNMP NEO Map: " + s.Name
+	} else if resolvedType == "fc" {
+		title = "TWSNMP FC Map: " + s.Name
+	}
+
+	u, err := url.Parse(s.Url)
+	if err != nil {
+		return false
+	}
+	q := u.Query()
+	// TWSNMP FCパラメータ
+	q.Set("UserID", s.User)
+	q.Set("Password", s.Password)
+	// TWSNMP NEOパラメータ
+	q.Set("user", s.User)
+	q.Set("password", s.Password)
+	if av, ok := t.api.Load(s.Id); ok {
+		if a, ok := av.(*Api); ok && a.Token != "" {
+			q.Set("token", a.Token)
+		}
+	}
+	u.RawQuery = q.Encode()
+
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "TWSNMP Map:" + s.Name,
+		Title:  title,
+		Width:  1280,
+		Height: 800,
 		Mac: application.MacWindow{
 			Backdrop: application.MacBackdropTranslucent,
 		},
-		URL: s.Url + "/?UserID=" + s.User + "&Password=" + s.Password,
+		URL: u.String(),
 	})
 	return true
 }
@@ -167,6 +211,7 @@ func (t *Twsnmp) SaveViewport(vp string) {
 		return b.Put([]byte("viewport"), []byte(vp))
 	})
 }
+
 func (t *Twsnmp) IsDark() bool {
 	r := false
 	t.db.View(func(tx *bbolt.Tx) error {
@@ -223,11 +268,16 @@ func (t *Twsnmp) SaveMapStyle(ms string) {
 
 // loadはsiteの設定を読み込む
 func (t *Twsnmp) load() {
-	conf, err := os.UserConfigDir()
-	if err != nil {
-		log.Fatal(err)
+	conf := os.Getenv("TWSNMPMW_CONFIG_DIR")
+	if conf == "" {
+		var err error
+		conf, err = os.UserConfigDir()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	os.MkdirAll(filepath.Join(conf, "twsnmpmw"), 0766)
+	var err error
 	t.db, err = bbolt.Open(filepath.Join(conf, "twsnmpmw", "twsnmpmw.db"), 0600, nil)
 	if err != nil {
 		log.Fatalf("Open err=%v", err)
@@ -246,8 +296,9 @@ func (t *Twsnmp) load() {
 			if err := json.Unmarshal(v, &s); err == nil && id == s.Id {
 				t.Sites.Store(id, &s)
 				t.api.Store(id, &Api{
-					Id:  id,
-					Url: s.Url,
+					Id:   id,
+					Url:  s.Url,
+					Type: s.Type,
 				})
 			}
 			return nil
@@ -278,7 +329,7 @@ func (t *Twsnmp) checkSiteState() chan bool {
 							return true
 						}
 						if a.Token == "" {
-							if !a.login(loginParam{UserID: s.User, Password: s.Password}) {
+							if !a.login(s.User, s.Password) {
 								a.State = "unknown"
 								return true
 							}
@@ -300,17 +351,84 @@ var insecureTransport = &http.Transport{
 
 var insecureClient = &http.Client{Transport: insecureTransport}
 
-type loginParam struct {
+type fcLoginParam struct {
 	UserID   string `json:"UserID"`
 	Password string `json:"Password"`
+}
+
+type neoLoginParam struct {
+	User     string `json:"user"`
+	Password string `json:"password"`
 }
 
 type loginResp struct {
 	Token string `json:"token"`
 }
 
-func (a *Api) login(l loginParam) bool {
-	j, err := json.Marshal(&l)
+func (a *Api) login(user, password string) bool {
+	switch a.Type {
+	case "neo":
+		return a.loginNeo(user, password)
+	case "fc":
+		return a.loginFC(user, password)
+	default:
+		// 自動判別: まず NEO を試行、失敗時に FC を試行
+		if a.loginNeo(user, password) {
+			a.Type = "neo"
+			return true
+		}
+		if a.loginFC(user, password) {
+			a.Type = "fc"
+			return true
+		}
+		return false
+	}
+}
+
+func (a *Api) loginNeo(user, password string) bool {
+	p := neoLoginParam{User: user, Password: password}
+	j, err := json.Marshal(&p)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequest(http.MethodPost, a.Url+"/api/login", bytes.NewBuffer(j))
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := insecureClient.Do(req.WithContext(ctx))
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	var r loginResp
+	if err := json.Unmarshal(body, &r); err != nil {
+		log.Println(err)
+		return false
+	}
+	if r.Token == "" {
+		return false
+	}
+	a.Token = r.Token
+	return true
+}
+
+func (a *Api) loginFC(user, password string) bool {
+	p := fcLoginParam{UserID: user, Password: password}
+	j, err := json.Marshal(&p)
 	if err != nil {
 		log.Println(err)
 		return false
@@ -329,8 +447,7 @@ func (a *Api) login(l loginParam) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	if resp.ContentLength > 1024 {
-		log.Printf("size over %d", resp.ContentLength)
+	if resp.StatusCode != http.StatusOK {
 		return false
 	}
 	body, err := io.ReadAll(resp.Body)
@@ -341,6 +458,9 @@ func (a *Api) login(l loginParam) bool {
 	var r loginResp
 	if err := json.Unmarshal(body, &r); err != nil {
 		log.Println(err)
+		return false
+	}
+	if r.Token == "" {
 		return false
 	}
 	a.Token = r.Token
@@ -367,6 +487,15 @@ func (a *Api) GetState() {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		a.Token = ""
+		a.State = "unknown"
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		a.State = "unknown"
+		return
+	}
 	if resp.ContentLength > 1024*64*1024 {
 		log.Printf("size over %d", resp.ContentLength)
 		return

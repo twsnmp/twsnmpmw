@@ -14,30 +14,43 @@ const EditSite: Component<Props> = (props:Props) => {
   let url : HTMLInputElement | undefined;
   let user : HTMLInputElement | undefined;
   let password : HTMLInputElement | undefined;
+  let siteType: HTMLSelectElement | undefined;
+
   const save = async () => {
     site.name = name ? name.value : "";
     site.url = url ? url.value : "";
     site.user = user ? user.value : "";
     site.password = password ? password.value : "";
-    await UpdateSite(site.id,site.name,site.url,site.user,site.password);
+    site.type = siteType ? siteType.value : "auto";
+    await UpdateSite(site.id, site.name, site.url, site.user, site.password, site.type);
     props.close();
   };
+
   return (
     <>
       <form class="max-w-sm mx-auto mt-5">
         <div class="mb-5">
           <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">名前
-            <input ref={name} value={site.name} class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="TWSNMP FCの名前" />
+            <input ref={name} value={site.name} class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="サイト名 (例: 本社ネットワーク)" />
+          </label>
+        </div>
+        <div class="mb-5">
+          <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">種別
+            <select ref={siteType} value={site.type || "auto"} class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
+              <option value="auto">自動判別 (Auto)</option>
+              <option value="neo">TWSNMP NEO</option>
+              <option value="fc">TWSNMP FC</option>
+            </select>
           </label>
         </div>
         <div class="mb-5">
           <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">URL
-            <input ref={url} value={site.url} type="url" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="TWSNMP FCのURL" />
+            <input ref={url} value={site.url} type="url" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="http://localhost:8080" />
           </label>
         </div>
         <div class="mb-5">
           <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">ユーザーID
-            <input ref={user} value={site.user} class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="ユーザーID" />
+            <input ref={user} value={site.user} class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="ユーザーID (例: twsnmp)" />
           </label>
         </div>
         <div class="mb-5">
