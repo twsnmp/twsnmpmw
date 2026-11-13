@@ -75,8 +75,15 @@ func resolveAppBinary(t *testing.T) string {
 	return abs
 }
 
-// startAppWithMCP launches the app built with -tags mcp using an isolated config directory.
+// startAppWithMCP launches the app built with -tags mcp using an isolated config directory
+// and background auto-update checks disabled for deterministic testing.
 func startAppWithMCP(t *testing.T) *mcpClient {
+	t.Helper()
+	return startAppWithMCPEnv(t, "TWSNMPMW_DISABLE_AUTO_UPDATE=1")
+}
+
+// startAppWithMCPEnv launches the app built with -tags mcp with optional extra environment variables.
+func startAppWithMCPEnv(t *testing.T, extraEnv ...string) *mcpClient {
 	t.Helper()
 
 	binPath := resolveAppBinary(t)
@@ -90,6 +97,7 @@ func startAppWithMCP(t *testing.T) *mcpClient {
 		"WAILS_MCP_HIDE_CURSOR=1",
 		"TWSNMPMW_CONFIG_DIR="+configDir,
 	)
+	cmd.Env = append(cmd.Env, extraEnv...)
 
 	var logBuf bytes.Buffer
 	cmd.Stdout = &logBuf

@@ -8,11 +8,11 @@
         <key>CFBundleExecutable</key>
         <string>twsnmpmw</string>
         <key>CFBundleIdentifier</key>
-        <string>jo.co.twise.twsnmpmw</string>
+        <string>jp.co.twise.twsnmpmw</string>
         <key>CFBundleVersion</key>
         <string>0.1.0</string>
         <key>CFBundleGetInfoString</key>
-        <string>Multi Windows Vueiwer for TWSNMP FC</string>
+        <string>Multi Windows Viewer for TWSNMP FC</string>
         <key>CFBundleShortVersionString</key>
         <string>0.1.0</string>
         <key>CFBundleIconFile</key>

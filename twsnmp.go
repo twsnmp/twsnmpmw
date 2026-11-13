@@ -39,9 +39,52 @@ type Api struct {
 }
 
 type Twsnmp struct {
-	db    *bbolt.DB
-	Sites sync.Map
-	api   sync.Map
+	db      *bbolt.DB
+	Sites   sync.Map
+	api     sync.Map
+	updater *updateManager
+}
+
+// GetVersion は現在のアプリバージョン情報を返します
+func (t *Twsnmp) GetVersion() VersionInfo {
+	if t.updater == nil {
+		return resolveVersionInfo(version, commit)
+	}
+	return t.updater.version
+}
+
+// GetUpdateState は現在のアップデート状態を返します
+func (t *Twsnmp) GetUpdateState() UpdateState {
+	if t.updater == nil {
+		return UpdateState{
+			State:          "unconfigured",
+			CurrentVersion: resolveVersionInfo(version, commit).Display,
+		}
+	}
+	return t.updater.State()
+}
+
+// CheckUpdate は最新バージョンの有無を確認します
+func (t *Twsnmp) CheckUpdate() UpdateState {
+	if t.updater == nil {
+		return t.GetUpdateState()
+	}
+	return t.updater.CheckUpdate()
+}
+
+// ApplyUpdate は更新をダウンロード・検証・適用し、アプリを再起動します
+func (t *Twsnmp) ApplyUpdate() error {
+	if t.updater == nil {
+		return fmt.Errorf("updater not initialized")
+	}
+	return t.updater.ApplyUpdate()
+}
+
+func (t *Twsnmp) close() {
+	if t.db != nil {
+		_ = t.db.Close()
+		t.db = nil
+	}
 }
 
 func (t *Twsnmp) GetSites() []Site {

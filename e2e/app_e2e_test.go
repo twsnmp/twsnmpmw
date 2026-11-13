@@ -3,10 +3,13 @@
 package e2e
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -137,6 +140,118 @@ func TestE2E_ConfigDarkMode(t *testing.T) {
 	})
 	if strings.TrimSpace(isDark) != "true" {
 		t.Fatalf("expected IsDark() == true, got %s", isDark)
+	}
+}
+
+func TestE2E_UpdaterUI(t *testing.T) {
+	var currentBody atomic.Value
+	currentBody.Store("E2E release notes for v0.1.1 (startup)")
+	dummyDigest := fmt.Sprintf("%x", sha256.Sum256([]byte("dummy-release-artifact")))
+
+	var serverURL string
+	mockGitHub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/twsnmp/twsnmpmw/releases/latest":
+			tag := "v0.1.1"
+			body := currentBody.Load().(string)
+			payload := map[string]any{
+				"tag_name": tag,
+				"name":     "Release " + tag,
+				"body":     body,
+				"assets": []map[string]any{
+					{"id": 1, "name": "SHA256SUMS", "size": 256, "browser_download_url": serverURL + "/download/SHA256SUMS"},
+					{"id": 2, "name": "twsnmpmw-darwin-arm64.zip", "size": 1024, "browser_download_url": serverURL + "/download/twsnmpmw-darwin-arm64.zip"},
+					{"id": 3, "name": "twsnmpmw-windows-amd64.zip", "size": 1024, "browser_download_url": serverURL + "/download/twsnmpmw-windows-amd64.zip"},
+					{"id": 4, "name": "twsnmpmw-linux-amd64.tar.gz", "size": 1024, "browser_download_url": serverURL + "/download/twsnmpmw-linux-amd64.tar.gz"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(payload)
+		case "/download/SHA256SUMS":
+			w.Header().Set("Content-Type", "text/plain")
+			fmt.Fprintf(w, "%s  twsnmpmw-darwin-arm64.zip\n%s  twsnmpmw-windows-amd64.zip\n%s  twsnmpmw-linux-amd64.tar.gz\n", dummyDigest, dummyDigest, dummyDigest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer mockGitHub.Close()
+	serverURL = mockGitHub.URL
+
+	mcp := startAppWithMCPEnv(t, "TWSNMPMW_GITHUB_BASE_URL="+mockGitHub.URL)
+
+	// 1. Startup background check should surface badge on Settings button.
+	waitUntil(t, 10*time.Second, func() bool {
+		q, err := mcp.callTool("dom_html", map[string]any{
+			"selector": `[data-testid="update-badge"]`,
+		})
+		return err == nil && strings.Contains(q, "update-badge")
+	}, "update badge did not appear after startup check")
+
+	// 2. Open Settings view ("設定" tab is 4th button in BottomNav).
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": "div.fixed.bottom-0 button:nth-of-type(4)",
+	})
+
+	// 3. Verify initial version v0.1.0, detected update v0.1.1, and apply button appear.
+	waitUntil(t, 5*time.Second, func() bool {
+		sec, err := mcp.callTool("dom_html", map[string]any{
+			"selector": `[data-testid="updater-section"]`,
+		})
+		if err != nil || !strings.Contains(sec, "v0.1.1") || !strings.Contains(sec, "E2E release notes for v0.1.1 (startup)") {
+			return false
+		}
+		ver, err := mcp.callTool("dom_html", map[string]any{
+			"selector": `[data-testid="app-version"]`,
+		})
+		if err != nil || !strings.Contains(ver, "v0.1.0") {
+			return false
+		}
+		btn, err := mcp.callTool("dom_html", map[string]any{
+			"selector": `[data-testid="apply-update-btn"]`,
+		})
+		return err == nil && strings.Contains(btn, "アップデートを実施")
+	}, "updater section did not render v0.1.0 version info and v0.1.1 update prompt")
+
+	// 4. Refresh release details and verify manual check button updates UI and backend state.
+	currentBody.Store("E2E release notes for v0.1.1 (manual)")
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": `[data-testid="check-update-btn"]`,
+	})
+
+	waitUntil(t, 5*time.Second, func() bool {
+		sec, err := mcp.callTool("dom_html", map[string]any{
+			"selector": `[data-testid="updater-section"]`,
+		})
+		return err == nil && strings.Contains(sec, "E2E release notes for v0.1.1 (manual)")
+	}, "manual check button did not refresh release info for v0.1.1")
+
+	stateRaw := mcp.mustCallTool(t, "call_bound_method", map[string]any{
+		"name": "main.Twsnmp.GetUpdateState",
+	})
+	var state struct {
+		State           string `json:"state"`
+		LatestVersion   string `json:"latestVersion"`
+		UpdateAvailable bool   `json:"updateAvailable"`
+	}
+	if err := json.Unmarshal([]byte(stateRaw), &state); err != nil {
+		t.Fatalf("failed to unmarshal GetUpdateState: %v", err)
+	}
+	if state.State != "available" || !state.UpdateAvailable || state.LatestVersion != "v0.1.1" {
+		t.Fatalf("unexpected GetUpdateState result: %+v", state)
+	}
+
+	verRaw := mcp.mustCallTool(t, "call_bound_method", map[string]any{
+		"name": "main.Twsnmp.GetVersion",
+	})
+	var ver struct {
+		Version  string `json:"version"`
+		Platform string `json:"platform"`
+	}
+	if err := json.Unmarshal([]byte(verRaw), &ver); err != nil {
+		t.Fatalf("failed to unmarshal GetVersion: %v", err)
+	}
+	if ver.Version != "v0.1.0" || ver.Platform == "" {
+		t.Fatalf("unexpected GetVersion result: %+v", ver)
 	}
 }
 

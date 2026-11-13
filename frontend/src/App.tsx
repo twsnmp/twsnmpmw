@@ -1,38 +1,102 @@
 import 'flowbite';
-import { Match, Switch, createSignal,onMount } from 'solid-js';
-import { Site } from "../bindings/github.com/twsnmp/twsnmpmw"
+import { Match, Switch, Show, createSignal, onMount, onCleanup } from 'solid-js';
+import { Events } from "@wailsio/runtime";
+import { Site, UpdateState, VersionInfo } from "../bindings/github.com/twsnmp/twsnmpmw"
 import Map from './Map';
 import List from './List';
 import EditSite from './EditSite';
-import Config  from './Config';
-import {MWConfig} from './Config';
-import { SaveDark,SaveMapStyle,IsDark,GetMapStyle } from '../bindings/github.com/twsnmp/twsnmpmw/twsnmp';
+import Config from './Config';
+import { MWConfig } from './Config';
+import {
+  SaveDark,
+  SaveMapStyle,
+  IsDark,
+  GetMapStyle,
+  GetVersion,
+  GetUpdateState,
+  CheckUpdate,
+  ApplyUpdate,
+} from '../bindings/github.com/twsnmp/twsnmpmw/twsnmp';
 
 const [page, setPage] = createSignal("list");
 let site: Site;
 let oldPage = "list";
-let config :MWConfig = {
-  dark:false,
-  mapStyle:"",
+let config: MWConfig = {
+  dark: false,
+  mapStyle: "",
 };
 
 const App = () => {
+  const [versionInfo, setVersionInfo] = createSignal<VersionInfo>(VersionInfo.createFrom());
+  const [updateState, setUpdateState] = createSignal<UpdateState>(UpdateState.createFrom({ state: "idle" }));
+
+  const applyUpdateSnapshot = (incoming: Partial<UpdateState> | null | undefined) => {
+    if (!incoming) {
+      return;
+    }
+    const next = UpdateState.createFrom(incoming);
+    setUpdateState((prev) => {
+      if (next.seq > 0 && prev.seq > 0 && next.seq <= prev.seq) {
+        return prev;
+      }
+      return next;
+    });
+  };
+
   const close = () => {
     setPage(oldPage);
   }
-  onMount(async ()=>{
+
+  onMount(async () => {
+    const offUpdate = Events.On("twsnmp:updater:state", (ev) => {
+      if (ev && ev.data) {
+        applyUpdateSnapshot(ev.data as Partial<UpdateState>);
+      }
+    });
+    onCleanup(() => {
+      offUpdate();
+    });
+
     config.dark = await IsDark();
-    config.mapStyle  = await GetMapStyle();
+    config.mapStyle = await GetMapStyle();
     setDarkMode(config.dark);
+
+    const [ver, st] = await Promise.all([GetVersion(), GetUpdateState()]);
+    setVersionInfo(VersionInfo.createFrom(ver));
+    applyUpdateSnapshot(st);
   });
-  const saveConfig = (c:MWConfig) => {
+
+  const handleCheckUpdate = async () => {
+    try {
+      const st = await CheckUpdate();
+      applyUpdateSnapshot(st);
+    } catch (err) {
+      setUpdateState((prev) => UpdateState.createFrom({
+        ...prev,
+        state: "error",
+        error: String(err),
+      }));
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    try {
+      await ApplyUpdate();
+    } catch (err) {
+      const st = await GetUpdateState();
+      applyUpdateSnapshot(st.error ? st : { ...st, state: "error", error: String(err) });
+    }
+  };
+
+  const saveConfig = (c: MWConfig) => {
     SaveDark(c.dark);
     SaveMapStyle(c.mapStyle);
     config = c;
     setDarkMode(c.dark);
     setPage(oldPage);
   }
-  const setDarkMode = (dark:boolean) => {
+
+  const setDarkMode = (dark: boolean) => {
     if (dark) {
       document.documentElement.classList.add('dark');
       document.documentElement.style.backgroundColor = "rgba(19,19,19,0.8)";
@@ -41,32 +105,46 @@ const App = () => {
       document.documentElement.style.backgroundColor = "white";
     }
   }
+
   const editSite = (s: Site) => {
     site = s;
     oldPage = page();
     setPage("edit");
   }
+
   return (
     <Switch>
       <Match when={page() == "list"}>
         <List edit={editSite}></List>
-        <BottomNav></BottomNav>
+        <BottomNav updateAvailable={updateState().updateAvailable}></BottomNav>
       </Match>
       <Match when={page() == "map"}>
         <Map mapStyle={config.mapStyle}></Map>
-        <BottomNav></BottomNav>
+        <BottomNav updateAvailable={updateState().updateAvailable}></BottomNav>
       </Match>
       <Match when={page() == "edit"}>
         <EditSite close={close} site={site}></EditSite>
       </Match>
       <Match when={page() == "config"}>
-        <Config save={saveConfig} close={close} config={config}></Config>
+        <Config
+          save={saveConfig}
+          close={close}
+          config={config}
+          version={versionInfo()}
+          updateState={updateState()}
+          checkUpdate={handleCheckUpdate}
+          applyUpdate={handleApplyUpdate}
+        ></Config>
       </Match>
     </Switch>
   )
 }
 
-const BottomNav = () => {
+type BottomNavProps = {
+  updateAvailable: boolean,
+}
+
+const BottomNav = (props: BottomNavProps) => {
   const addSite = () => {
     site = Site.createFrom({
       id: "",
@@ -80,12 +158,12 @@ const BottomNav = () => {
     oldPage = page();
     setPage("edit");
   }
-  const showConfig = ()=> {
+  const showConfig = () => {
     oldPage = page();
     setPage("config");
   }
   const getTabColor = (p: string) => {
-    return p == page() ? 
+    return p == page() ?
       "text-sm text-blue-500 dark:text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-500"
       : "text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-500"
   }
@@ -111,16 +189,23 @@ const BottomNav = () => {
           <span class="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-500">登録</span>
         </button>
         <button onClick={showConfig} type="button" class="inline-flex flex-col items-center justify-center px-5 hover:bg-gray-50 dark:hover:bg-gray-800 group">
-          <svg class="w-[32px] h-[32px] mb-1 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" d="M9.586 2.586A2 2 0 0 1 11 2h2a2 2 0 0 1 2 2v.089l.473.196.063-.063a2.002 2.002 0 0 1 2.828 0l1.414 1.414a2 2 0 0 1 0 2.827l-.063.064.196.473H20a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.089l-.196.473.063.063a2.002 2.002 0 0 1 0 2.828l-1.414 1.414a2 2 0 0 1-2.828 0l-.063-.063-.473.196V20a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-.089l-.473-.196-.063.063a2.002 2.002 0 0 1-2.828 0l-1.414-1.414a2 2 0 0 1 0-2.827l.063-.064L4.089 15H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h.09l.195-.473-.063-.063a2 2 0 0 1 0-2.828l1.414-1.414a2 2 0 0 1 2.827 0l.064.063L9 4.089V4a2 2 0 0 1 .586-1.414ZM8 12a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" clip-rule="evenodd" />
-          </svg>
+          <div class="relative">
+            <svg class="w-[32px] h-[32px] mb-1 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" d="M9.586 2.586A2 2 0 0 1 11 2h2a2 2 0 0 1 2 2v.089l.473.196.063-.063a2.002 2.002 0 0 1 2.828 0l1.414 1.414a2 2 0 0 1 0 2.827l-.063.064.196.473H20a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.089l-.196.473.063.063a2.002 2.002 0 0 1 0 2.828l-1.414 1.414a2 2 0 0 1-2.828 0l-.063-.063-.473.196V20a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-.089l-.473-.196-.063.063a2.002 2.002 0 0 1-2.828 0l-1.414-1.414a2 2 0 0 1 0-2.827l.063-.064L4.089 15H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h.09l.195-.473-.063-.063a2.002 2.002 0 0 1 0-2.828l1.414-1.414a2 2 0 0 1 2.827 0l.064.063L9 4.089V4a2 2 0 0 1 .586-1.414ZM8 12a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" clip-rule="evenodd" />
+            </svg>
+            <Show when={props.updateAvailable}>
+              <span
+                data-testid="update-badge"
+                title="新しいバージョンが利用可能です"
+                class="absolute -top-0.5 -right-1 inline-flex h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-700"
+              />
+            </Show>
+          </div>
           <span class="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-500">設定</span>
         </button>
       </div>
     </div>
   )
-
 }
-
 
 export default App

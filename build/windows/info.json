@@ -6,10 +6,10 @@
 		"0000": {
 			"ProductVersion": "0.1.0",
 			"CompanyName": "TWSNMP",
-			"FileDescription": "Multi Windows Vuiwer for TWSNMP FC",
+			"FileDescription": "Multi Windows Viewer for TWSNMP FC",
 			"LegalCopyright": "© 2024, Masayuki Yamai",
 			"ProductName": "twsnmpmw",
-			"Comments": "Multi Windows Vuiwer for TWSNMP FC"
+			"Comments": "Multi Windows Viewer for TWSNMP FC"
 		}
 	}
 }

@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows/amd64
+            os: windows-latest
+            artifact_name: twsnmpmw-windows-amd64.zip
+          - platform: linux/amd64
+            os: ubuntu-24.04
+            artifact_name: twsnmpmw-linux-amd64.tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev build-essential pkg-config
+
+      - name: Install Wails v3 CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+          Join-Path (go env GOPATH) "bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Wails v3 CLI (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Resolve version metadata
+        id: meta
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag_name }}"
+          if [ -z "$TAG" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+          fi
+          COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          CLEAN_VERSION="${TAG#v}"
+          CLEAN_VERSION="${CLEAN_VERSION#V}"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "clean_version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Resolved VERSION=$TAG CLEAN_VERSION=$CLEAN_VERSION COMMIT=$COMMIT"
+
+      - name: Update Windows version metadata
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $infoPath = "build/windows/info.json"
+          $info = Get-Content $infoPath -Raw | ConvertFrom-Json
+          $ver = "${{ steps.meta.outputs.clean_version }}"
+          $fixedVer = ($ver -replace '[-+].*$', '')
+          $info.fixed.file_version = $fixedVer
+          $info.info.'0000'.ProductVersion = $ver
+          $info | ConvertTo-Json -Depth 5 | Set-Content $infoPath -Encoding UTF8
+
+      - name: Build app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          wails3 task windows:build ARCH=amd64 VERSION="${{ steps.meta.outputs.version }}" COMMIT="${{ steps.meta.outputs.commit }}"
+
+      - name: Build app (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          wails3 task linux:build ARCH=amd64 VERSION="${{ steps.meta.outputs.version }}" COMMIT="${{ steps.meta.outputs.commit }}"
+
+      - name: Run Go tests
+        run: go test -v ./...
+
+      - name: Package Release (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "bin/twsnmpmw.exe")) {
+            throw "Expected binary bin/twsnmpmw.exe not found"
+          }
+          Compress-Archive -Path bin/twsnmpmw.exe -DestinationPath "${{ matrix.artifact_name }}" -Force
+
+      - name: Package Release (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          if [ ! -f "bin/twsnmpmw" ]; then
+            echo "Expected binary bin/twsnmpmw not found" >&2
+            exit 1
+          fi
+          tar -czvf "${{ matrix.artifact_name }}" -C bin twsnmpmw
+
+      - name: Upload artifact for release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}
+          retention-days: 1
+
+  release:
+    name: Create Draft Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd release-artifacts
+          sha256sum twsnmpmw-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          TAG="${{ inputs.tag_name }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          IS_PRERELEASE="false"
+          if [[ "$TAG" == *-* ]]; then
+            IS_PRERELEASE="true"
+          fi
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Create Draft GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*
+          draft: true
+          prerelease: ${{ steps.tag.outputs.prerelease == 'true' }}
+          tag_name: ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
