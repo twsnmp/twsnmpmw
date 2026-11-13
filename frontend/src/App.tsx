@@ -21,12 +21,12 @@ import {
 const [page, setPage] = createSignal("list");
 let site: Site;
 let oldPage = "list";
-let config: MWConfig = {
-  dark: false,
-  mapStyle: "",
-};
 
 const App = () => {
+  const [config, setConfig] = createSignal<MWConfig>({
+    dark: false,
+    mapStyle: "",
+  });
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo>(VersionInfo.createFrom());
   const [updateState, setUpdateState] = createSignal<UpdateState>(UpdateState.createFrom({ state: "idle" }));
 
@@ -57,11 +57,14 @@ const App = () => {
       offUpdate();
     });
 
-    config.dark = await IsDark();
-    config.mapStyle = await GetMapStyle();
-    setDarkMode(config.dark);
-
-    const [ver, st] = await Promise.all([GetVersion(), GetUpdateState()]);
+    const [dark, mapStyle, ver, st] = await Promise.all([
+      IsDark(),
+      GetMapStyle(),
+      GetVersion(),
+      GetUpdateState(),
+    ]);
+    setConfig({ dark, mapStyle });
+    setDarkMode(dark);
     setVersionInfo(VersionInfo.createFrom(ver));
     applyUpdateSnapshot(st);
   });
@@ -88,10 +91,9 @@ const App = () => {
     }
   };
 
-  const saveConfig = (c: MWConfig) => {
-    SaveDark(c.dark);
-    SaveMapStyle(c.mapStyle);
-    config = c;
+  const saveConfig = async (c: MWConfig) => {
+    await Promise.all([SaveDark(c.dark), SaveMapStyle(c.mapStyle)]);
+    setConfig(c);
     setDarkMode(c.dark);
     setPage(oldPage);
   }
@@ -119,7 +121,7 @@ const App = () => {
         <BottomNav updateAvailable={updateState().updateAvailable}></BottomNav>
       </Match>
       <Match when={page() == "map"}>
-        <Map mapStyle={config.mapStyle}></Map>
+        <Map mapStyle={config().mapStyle}></Map>
         <BottomNav updateAvailable={updateState().updateAvailable}></BottomNav>
       </Match>
       <Match when={page() == "edit"}>
@@ -129,7 +131,7 @@ const App = () => {
         <Config
           save={saveConfig}
           close={close}
-          config={config}
+          config={config()}
           version={versionInfo()}
           updateState={updateState()}
           checkUpdate={handleCheckUpdate}

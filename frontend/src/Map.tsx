@@ -5,6 +5,7 @@ import { Site } from "../bindings/github.com/twsnmp/twsnmpmw"
 import { GetSites,LoadViewport,SaveViewport,UpdateSiteLoc,OpenSiteMap } from "../bindings/github.com/twsnmp/twsnmpmw/twsnmp"
 import 'maplibre-gl/dist/maplibre-gl.css'
 import {Events} from "@wailsio/runtime";
+import { resolveMapStyle } from "./mapStyle";
 
 type Props = {
   mapStyle: string
@@ -15,10 +16,9 @@ const Map: Component<Props> = (props:Props) => {
     const l = await GetSites() as any;
     setSites(l)
   }
-  Events.On("update",()=>{
+  const offUpdate = Events.On("update",()=>{
     refresh();
   });
-  const mapStyle = props.mapStyle || "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json"; 
   const [viewport, setViewport] = createSignal({
     center: [139.75,35.68],
     zoom: 2,
@@ -36,6 +36,7 @@ const Map: Component<Props> = (props:Props) => {
     }
   });
   onCleanup(async()=> {
+    offUpdate();
     const vp = viewport()
     await SaveViewport(vp.zoom + "," + vp.center[0] + "," + vp.center[1]);
   })
@@ -86,7 +87,7 @@ ${s.name}${typeLabel}
     <MapGL
       mapLib={maplibre}
       options={{ 
-        style: mapStyle
+        style: resolveMapStyle(props.mapStyle)
       }}
       viewport={viewport()}
       onViewportChange={(evt: Viewport) => setViewport(evt)}

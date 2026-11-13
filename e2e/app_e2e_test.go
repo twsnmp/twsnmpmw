@@ -143,6 +143,144 @@ func TestE2E_ConfigDarkMode(t *testing.T) {
 	}
 }
 
+func domHTML(mcp *mcpClient, selector string) (string, error) {
+	raw, err := mcp.callTool("dom_html", map[string]any{
+		"selector": selector,
+	})
+	if err != nil {
+		return "", err
+	}
+	var payload struct {
+		HTML string `json:"html"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return raw, nil
+	}
+	return payload.HTML, nil
+}
+
+func TestE2E_ConfigMapStylePresetsAndValidation(t *testing.T) {
+	mcp := startAppWithMCP(t)
+
+	// 1. Open Settings view ("設定" tab is 4th button in BottomNav).
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": "div.fixed.bottom-0 button:nth-of-type(4)",
+	})
+
+	waitUntil(t, 5*time.Second, func() bool {
+		html, err := domHTML(mcp, `[data-testid="map-style-preset-default-empty"]`)
+		return err == nil && strings.Contains(html, `aria-pressed="true"`)
+	}, "default-empty preset should initially be active")
+
+	// 2. Click GSI Pale preset shortcut and verify textarea + active state update.
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": `[data-testid="map-style-preset-gsi-pale"]`,
+	})
+
+	waitUntil(t, 5*time.Second, func() bool {
+		val, err := mcp.callTool("js_eval", map[string]any{
+			"js": "return document.getElementById('map-style')?.value || '';",
+		})
+		if err != nil || !strings.Contains(val, "cyberjapandata.gsi.go.jp/xyz/pale/") {
+			return false
+		}
+		html, err := domHTML(mcp, `[data-testid="map-style-preset-gsi-pale"]`)
+		return err == nil && strings.Contains(html, `aria-pressed="true"`)
+	}, "GSI pale preset did not populate textarea and active state")
+
+	// 3. Save config and verify GetMapStyle persists the JSON style.
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": "form button.bg-blue-700",
+	})
+
+	waitUntil(t, 5*time.Second, func() bool {
+		raw, err := mcp.callTool("call_bound_method", map[string]any{
+			"name": "main.Twsnmp.GetMapStyle",
+		})
+		return err == nil && strings.Contains(raw, "cyberjapandata.gsi.go.jp/xyz/pale/")
+	}, "GetMapStyle did not persist GSI pale JSON style")
+
+	// 4. Switch to Map tab and verify MapLibre mounts with parsed JSON style.
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": "div.fixed.bottom-0 button:nth-of-type(2)",
+	})
+
+	waitUntil(t, 5*time.Second, func() bool {
+		q, err := mcp.callTool("dom_query", map[string]any{
+			"selector": "canvas.maplibregl-canvas",
+		})
+		return err == nil && q != ""
+	}, "MapLibre canvas did not mount with JSON map style")
+
+	// 5. Return to Settings, clear via default-empty shortcut, type invalid JSON, and submit.
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": "div.fixed.bottom-0 button:nth-of-type(4)",
+	})
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": `[data-testid="map-style-preset-default-empty"]`,
+	})
+	waitUntil(t, 5*time.Second, func() bool {
+		val, err := mcp.callTool("js_eval", map[string]any{
+			"js": "return document.getElementById('map-style')?.value ?? 'nonempty';",
+		})
+		return err == nil && val == ""
+	}, "default-empty preset did not clear textarea")
+
+	mcp.mustCallTool(t, "keyboard_type", map[string]any{
+		"selector": "#map-style",
+		"text":     "{ invalid_json ",
+		"delay_ms": 5,
+	})
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": "form button.bg-blue-700",
+	})
+
+	waitUntil(t, 5*time.Second, func() bool {
+		errHTML, err := domHTML(mcp, `[data-testid="map-style-error"]`)
+		if err != nil || !strings.Contains(errHTML, "スタイルは、URLかJSONで指定してください。") {
+			return false
+		}
+		invalid, err := mcp.callTool("js_eval", map[string]any{
+			"js": "return document.getElementById('map-style')?.getAttribute('aria-invalid') || '';",
+		})
+		return err == nil && strings.Contains(invalid, "true")
+	}, "validation error was not shown for invalid JSON map style")
+
+	// Verify backend still holds the valid GSI style (save was blocked).
+	persisted := mcp.mustCallTool(t, "call_bound_method", map[string]any{
+		"name": "main.Twsnmp.GetMapStyle",
+	})
+	if !strings.Contains(persisted, "cyberjapandata.gsi.go.jp/xyz/pale/") {
+		t.Fatalf("expected previously saved style to remain untouched, got: %s", persisted)
+	}
+
+	// 6. Click OSM Bright shortcut to fix error and save.
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": `[data-testid="map-style-preset-osm-bright-ja"]`,
+	})
+	waitUntil(t, 5*time.Second, func() bool {
+		invalid, err := mcp.callTool("js_eval", map[string]any{
+			"js": "return document.getElementById('map-style')?.getAttribute('aria-invalid') || '';",
+		})
+		if err != nil || !strings.Contains(invalid, "false") {
+			return false
+		}
+		_, err = domHTML(mcp, `[data-testid="map-style-error"]`)
+		return err != nil
+	}, "error state did not clear after selecting OSM Bright preset")
+
+	mcp.mustCallTool(t, "mouse_click", map[string]any{
+		"selector": "form button.bg-blue-700",
+	})
+
+	waitUntil(t, 5*time.Second, func() bool {
+		raw, err := mcp.callTool("call_bound_method", map[string]any{
+			"name": "main.Twsnmp.GetMapStyle",
+		})
+		return err == nil && strings.Contains(raw, "https://tile.openstreetmap.jp/styles/osm-bright-ja/style.json")
+	}, "GetMapStyle did not update to OSM Bright URL")
+}
+
 func TestE2E_UpdaterUI(t *testing.T) {
 	var currentBody atomic.Value
 	currentBody.Store("E2E release notes for v0.1.1 (startup)")
