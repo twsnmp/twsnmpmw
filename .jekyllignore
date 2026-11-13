@@ -1,0 +1,12 @@
+frontend/
+*.go
+go.mod
+go.sum
+Taskfile.yml
+build.sh
+build/
+bin/
+dist/
+e2e/
+scripts/
+appicon.png
